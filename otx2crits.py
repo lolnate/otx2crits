@@ -9,7 +9,7 @@ from pycrits import pycrits
 from configparser import ConfigParser
 
 # Crits vocabulary
-from vocabulary_test.indicators import IndicatorTypes as it
+from vocabulary.indicators import IndicatorTypes as it
 
 def parse_config(location):
     try:
