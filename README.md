@@ -11,6 +11,7 @@ Installation
 Copy config.ini.example to ~/.otx_config or another location of your choosing. Edit the file with your information.
 
 If necessary, add a source to CRITs for AlienVault. To do this:
+
 1. Click the gear symbol in the top left and go to "CRITs Control Panel".
 2. Click "Items" then the "Sources" tab.
 3. Click "Add SourceAccess" near the top right. Add your source.
@@ -28,8 +29,8 @@ CRITS 4 is required. The API for CRITS must be enabled.
 Python libraries
 - requests
 - pycrits from https://github.com/Magicked/pycrits
--- Note: The only difference is allowing pycrits to interface with proxies and verify with the requests library
--- git clone https://github.com/Magicked/pycrits; cd pycrits; python3 setup.py install
+  - Note: The only difference is allowing pycrits to interface with proxies and verify with the requests library
+  - git clone https://github.com/Magicked/pycrits; cd pycrits; python3 setup.py install
 
 Usage
 -----
