@@ -1,0 +1,24 @@
+[otx]
+# Alienvault OTX API key
+otx_api_key = <YOUR OTX API KEY>
+# AlienVault API URL. This will likely remain unchanged
+otx_url = https://otx.alienvault.com/api/v1
+
+[proxy]
+# Leave blank if you do not use a proxy
+http = http://user:pass@IP:PORT/
+https = http://user:pass@IP:PORT/
+
+[crits]
+# Add URLs for your CRITs prod and optionally dev environments
+prod_url = http://prod_ip.com/
+dev_url = http://dev_ip.com/
+# CRITs username
+username = nhausrath
+# API keys associated with that username
+prod_api_key = <API_KEY>
+dev_api_key = <API_KEY>
+# Verify SSL connections (used by python requests)
+verify = true
+# The CRITs source name we want to use
+source = AlienVault OTX
