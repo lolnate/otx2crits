@@ -276,8 +276,10 @@ def main():
         # Create the CRITs event first
         print('Adding Event to CRITs with title {}'.format(event_title))
         params = {
-            'bucket_list' : bucket_list,
+            'bucket_list' : ','.join(bucket_list),
             'description' : description,
+            'reference' : reference,
+            'method' : 'otx2crits',
         }
         event = build_crits_event(crits, event_title, description,
                                   crits_source, params=params)
