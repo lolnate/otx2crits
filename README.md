@@ -52,3 +52,7 @@ python3 otx2crits.py --dev -d 14
 ```
 
 Finally, you can set up a cron job to run this script regularly. This will allow you to subscribe to new pulses in AlienVault OTX and they will then be added to CRITs automatically. Yay automation!
+
+Then you can do fancy analysis on relationships!
+
+![crits relationship screenshot](https://magicked.github.io/images/crits_data_map.png)
