@@ -11,192 +11,350 @@ from configparser import ConfigParser
 # Crits vocabulary
 from vocabulary.indicators import IndicatorTypes as it
 
-def parse_config(location):
-    try:
-        config = ConfigParser()
-        config.read(location)
-    except Exception as e:
-        print('Error parsing config: {}'.format(e))
-        return False
-    if len(config.sections()) == 0:
-        print('Configuration file not found: {}'.format(location))
-        return False
-    return config
+class OTX2CRITs(object):
 
+    def __init__(self, dev=False, config=None, days=None):
+        # Load the configuration
+        self.config = self.load_config(config)
 
-def load_config(given_location=None):
-    '''
-    This checks several locations for the config file if a location is not
-    provided.
-    1) OTX_CONFIG_FILE environment variable
-    2) ~/.otx_config
-    '''
-    # given_location
-    if given_location:
-        return parse_config(given_location)
-    # environment variable
-    CONFIG_FILE = os.environ.get('OTX_CONFIG_FILE', None)
-    if CONFIG_FILE:
-        return parse_config(CONFIG_FILE)
-    # Final attempt
-    CONFIG_FILE = os.path.join(os.path.expanduser('~'), '.otx_config')
-    return parse_config(CONFIG_FILE)
+        # Now we're talkin
+        self.otx_api_key = self.config.get('otx', 'otx_api_key')
+        self.otx_url = self.config.get('otx', 'otx_url')
 
-
-def get_indicator_mapping():
-    # Indicators with no matching type return None
-    mapping = {
-        'FileHash-SHA256' : it.SHA256,
-        'FileHash-SHA1' : it.SHA1,
-        'URI' : it.URI,
-        'URL' : it.URI,
-        'hostname' : it.DOMAIN,
-        'domain' : it.DOMAIN,
-        'IPv4' : it.IPV4_ADDRESS,
-        'IPv6' : it.IPV6_ADDRESS,
-        'email' : it.EMAIL_ADDRESS,
-        'filepath' : it.FILE_PATH,
-        'FileHash-MD5' : it.MD5,
-        'Imphash' : it.IMPHASH,
-        'PEhash' : None,
-        'CIDR' : it.IPV4_SUBNET,
-        'mutex' : it.MUTEX,
-        'CVE' : None,
-    }
-    return mapping
-
-
-def send_otx_get(url, otx_api_key, proxies=None, verify=True):
-    headers = {
-        'X-OTX-API-KEY' : otx_api_key,
-    }
-
-    r = requests.get(url, headers=headers, proxies=proxies, verify=verify)
-    if r.status_code == 200:
-        return r.text
-    else:
-        print('Error retrieving AlienVault OTX data')
-        print('Status code was: {}'.format(r.status_code))
-        return False
-
-
-def get_subscribed_pulses(otx_url, otx_api_key, modified_since=None,
-                          proxies=None, verify=True):
-    args_append = ''
-    if modified_since:
-        args_append = '?modified_since={}'.format(modified_since.strftime(
-            '%Y-%m-%d %H:%M:%S.%f'))
-
-    response_data = send_otx_get('{}/pulses/subscribed{}'.format(otx_url,
-                                                                 args_append),
-                                 otx_api_key, proxies=proxies, verify=verify)
-    if response_data:
-        return json.loads(response_data)
-    else:
-        print("Error retrieving pulses. Exiting...")
-        sys.exit(0)
-
-
-def get_pulse_data(pulse_id, otx_url, otx_api_key, proxies=None, verify=True):
-    response_data = send_otx_get('{}/pulses/{}'.format(otx_url, pulse_id),
-                                 otx_api_key, proxies=proxies, verify=verify)
-    if response_data:
-        return json.loads(response_data)
-    else:
-        print('Error retrieving pulse with id {}'.format(pulse_id))
-        return False
-
-
-def is_pulse_in_crits(crits, pulse_id):
-    result = crits.event_count( params={ 'c-tickets.ticket_number' : pulse_id } )
-    if result > 0:
-        return True
-    return False
-
-
-def build_crits_event(crits, event_title, description, crits_source,
-                      params={}):
-    event = crits.add_event('Intel Sharing', event_title, description,
-                            crits_source, params=params)
-    return event
-
-
-def add_crits_indicator(crits, indicator_value, indicator_type, crits_source,
-                        params={}):
-    result = crits.add_indicator(indicator_type, indicator_value, crits_source,
-                        params=params)
-    if result:
-        if result['return_code'] == 0:
-            return result
-        else:
-            print('Error when adding CRITs Indicator: '
-                  '{}'.format(result['message']))
-    return False
-
-
-def add_ticket_to_crits_event(crits_url, event_id, pulse_id, params={},
-                              proxies={}, verify=True):
-    '''
-    Adds a ticket to the provided CRITs Event
-    '''
-    submit_url = '{}/api/v1/{}/{}/'.format(crits_url, 'events', event_id)
-    headers = {
-        'Content-Type' : 'application/json',
-    }
-
-    # date must be in the format %Y-%m-%d %H:%M:%S.%f
-    formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-    data = {
-        'action' : 'ticket_add',
-        'ticket' : {
-            'ticket_number' : pulse_id,
-            'date' : formatted_date,
+        self.proxies = {
+            'http' : self.config.get('proxy', 'http'),
+            'https' : self.config.get('proxy', 'https'),
         }
-    }
 
-    r = requests.patch(submit_url, headers=headers, proxies=proxies,
-                       params=params, data=json.dumps(data), verify=False)
-    if r.status_code == 200:
-        print('Ticket added successfully: {0} <-> {1}'.format(event_id,
-                                                              pulse_id))
-        return True
-    else:
-        print('Error with status code {0} and message {1} when adding a '
-              'ticket to event: {2} <-> {3}'.format(r.status_code, r.text,
-                                                    event_id, pulse_id))
-    return False
+        self.crits_url = self.config.get('crits', 'prod_url')
+        self.crits_dev_url = self.config.get('crits', 'dev_url')
+        self.crits_username = self.config.get('crits', 'username')
+        self.crits_api_key = self.config.get('crits', 'prod_api_key')
+        self.crits_dev_api_key = self.config.get('crits', 'dev_api_key')
+        self.crits_verify = self.config.getboolean('crits', 'verify')
+        self.crits_source = self.config.get('crits', 'source')
+        if dev:
+            self.crits_url = self.crits_dev_url
+            self.crits_api_key = self.crits_dev_api_key
+        if self.crits_url[-1] == '/':
+            self.crits_url = self.crits_url[:-1]
+
+        self.modified_since = None
+        if days:
+            print('Searching for pulses modified in the last {} '
+                  'days'.format(days))
+            self.modified_since = datetime.datetime.now()\
+                - datetime.timedelta(days=days)
+
+        # Get pycrits ready for magic
+        self.crits = pycrits(self.crits_url, self.crits_username,
+                             self.crits_api_key, proxies=self.proxies,
+                             verify=self.crits_verify)
 
 
-def build_crits_relationship(crits_url, event_id, indicator_id, params={},
-                             proxies={}, verify=True):
-    '''
-    Builds a relationship between the given event and indicator IDs
-    '''
-    submit_url = '{}/api/v1/{}/{}/'.format(crits_url, 'events', event_id)
-    headers = {
-        'Content-Type' : 'application/json',
-    }
+    def execute(self):
+        for pulse in self.get_pulse_generator(modified_since=\
+                                              self.modified_since,
+                                              proxies=self.proxies):
 
-    data = {
-        'action' : 'forge_relationship',
-        'right_type' : 'Indicator',
-        'right_id' : indicator_id,
-        'rel_type' : 'Related To',
-        'rel_date' : datetime.datetime.now(),
-        'rel_confidence' : 'high',
-        'rel_reason' : 'Related during automatic OTX import'
-    }
+            # This will be used to track relationships
+            relationship_map = []
 
-    r = requests.patch(submit_url, proxies=proxies, params=params, data=data, verify=False)
-    if r.status_code == 200:
-        print('Relationship built successfully: {0} <-> '
-              '{1}'.format(event_id,indicator_id))
-        return True
-    else:
-        print('Error with status code {0} and message {1} between these '
-              'indicators: {2} <-> {3}'.format(r.status_code, r.text,
-                                               event_id, indicator_id))
+            print('Found pulse with id {} and title {}'.format(pulse['id'],
+                                                               pulse['name']))
+            if self.is_pulse_in_crits(pulse['id']):
+                print('Pulse was already in CRITs')
+                continue
+
+            print('Adding pulse {} to CRITs.'.format(pulse['name']))
+            # Get the actual indicator and event data from the pulse
+            indicator_data = pulse['indicators']
+            event_title = pulse['name']
+            created = pulse['created']
+            reference = pulse['references'][0]
+            description = pulse['description']
+            bucket_list = pulse['tags']
+
+            # Create the CRITs event first
+            print('Adding Event to CRITs with title {}'.format(event_title))
+            params = {
+                'bucket_list' : ','.join(bucket_list),
+                'description' : description,
+                'reference' : reference,
+                'method' : 'otx2crits',
+            }
+            event = self.build_crits_event(event_title, description,
+                                      self.crits_source, params=params)
+            event_id = event['id']
+
+            # Add the indicators to CRITs
+            mapping = self.get_indicator_mapping()
+            for i in indicator_data:
+                # Reuse the params from creating the event
+                _type = mapping[i['type']]
+                if _type == None:
+                    continue
+                result = self.add_crits_indicator(i['indicator'],
+                                                  mapping[i['type']],
+                                                  self.crits_source,
+                                                  params=params)
+                if result:
+                    print('Indicator created: {}'.format(result))
+                    indicator_id = result['id']
+                    print('Indicator created with id: '
+                          '{}'.format(indicator_id))
+                    relationship_map.append( indicator_id )
+
+            # Add a ticket to the Event to track the pulse_id
+            print('Adding ticket to Event {}'.format(event_title))
+            params = {
+                'api_key' : self.crits_api_key,
+                'username' : self.crits_username,
+            }
+            success = self.add_ticket_to_crits_event(event_id, pulse['id'],
+                                                params=params,
+                                                proxies=self.proxies,
+                                                verify=self.crits_verify)
+            if not success:
+                print('Forging on after a ticket error.')
+
+            # Build the relationships between the event and indicators
+            print('Building relationships.')
+            for _id in relationship_map:
+                self.build_crits_relationship(event_id, _id, params=params,
+                                              proxies=self.proxies,
+                                              verify=self.crits_verify)
+
+
+    def parse_config(self, location):
+        '''
+        Parses the otx config file from the given location. Attempts to find
+        the config file if one is not given.
+        '''
+        try:
+            config = ConfigParser()
+            config.read(location)
+        except Exception as e:
+            print('Error parsing config: {}'.format(e))
+            return False
+        if len(config.sections()) == 0:
+            print('Configuration file not found: {}'.format(location))
+            return False
+        return config
+
+
+    def load_config(self, given_location=None):
+        '''
+        This checks several locations for the config file if a location is not
+        provided.
+        1) OTX_CONFIG_FILE environment variable
+        2) ~/.otx_config
+        '''
+        # given_location
+        if given_location:
+            return self.parse_config(given_location)
+        # environment variable
+        CONFIG_FILE = os.environ.get('OTX_CONFIG_FILE', None)
+        if CONFIG_FILE:
+            return self.parse_config(CONFIG_FILE)
+        # Final attempt
+        CONFIG_FILE = os.path.join(os.path.expanduser('~'), '.otx_config')
+        return self.parse_config(CONFIG_FILE)
+
+
+    def get_indicator_mapping(self):
+        # Indicators with no matching type return None
+        mapping = {
+            'FileHash-SHA256' : it.SHA256,
+            'FileHash-SHA1' : it.SHA1,
+            'URI' : it.URI,
+            'URL' : it.URI,
+            'hostname' : it.DOMAIN,
+            'domain' : it.DOMAIN,
+            'IPv4' : it.IPV4_ADDRESS,
+            'IPv6' : it.IPV6_ADDRESS,
+            'email' : it.EMAIL_ADDRESS,
+            'Email' : it.EMAIL_ADDRESS,
+            'filepath' : it.FILE_PATH,
+            'Filepath' : it.FILE_PATH,
+            'FileHash-MD5' : it.MD5,
+            'Imphash' : it.IMPHASH,
+            'PEhash' : None,
+            'CIDR' : it.IPV4_SUBNET,
+            'mutex' : it.MUTEX,
+            'Mutex' : it.MUTEX,
+            'CVE' : None,
+        }
+        return mapping
+
+
+    def send_otx_get(self, url, proxies=None, verify=True):
+        headers = {
+            'X-OTX-API-KEY' : self.otx_api_key,
+        }
+
+        r = requests.get(url, headers=headers, proxies=proxies, verify=verify)
+        if r.status_code == 200:
+            return r.text
+        else:
+            print('Error retrieving AlienVault OTX data')
+            print('Status code was: {}'.format(r.status_code))
+            return False
+
+
+    def get_pulse_generator(self, modified_since=None,
+                              proxies=None, verify=True):
+        '''
+        This will yield a pulse and all its data while it can obtain more data.
+        The OTX API has an issue when not specifying a "limit" on the pulses
+        returned. If we specify a limit, we can get all of our pulses, but if
+        we don't, the API will only ever return 5 pulses total. Derp.
+
+        This also takes advantage of returning multiple pages of pulses, so
+        a reasonable amount of data is returned at once.
+        '''
+        request_args = ''
+        args = []
+        page = 1
+        if modified_since:
+            args.append('modified_since={}'.format(\
+                modified_since.strftime('%Y-%m-%d %H:%M:%S.%f')))
+
+        args.append('limit=10')
+        args.append('page=1')
+        request_args = '&'.join(args)
+        request_args = '?{}'.format(request_args)
+
+        response_data = self.send_otx_get('{}/pulses/subscribed{}'\
+                                          .format(self.otx_url, request_args),
+                                            proxies=proxies, verify=verify)
+        # We are going to loop through to get all the pulse data
+        generator_data = []
+        while response_data:
+            all_pulses = json.loads(response_data)
+            if 'results' in all_pulses:
+                for pulse in all_pulses['results']:
+                    yield pulse
+            response_data = None
+            if 'next' in all_pulses:
+                if all_pulses['next']:
+                    response_data = self.send_otx_get(all_pulses['next'],
+                                                      proxies=proxies,
+                                                      verify=verify)
+
+
+    def get_pulse_data(self, pulse_id, proxies=None, verify=True):
+        response_data = self.send_otx_get('{}/pulses/{}'.format(self.otx_url,
+                                                                pulse_id),
+                                     proxies=proxies, verify=verify)
+        if response_data:
+            return json.loads(response_data)
+        else:
+            print('Error retrieving pulse with id {}'.format(pulse_id))
+            return False
+
+
+    def is_pulse_in_crits(self, pulse_id):
+        '''
+        Checks to see if the given pulse_id is already in CRITs as a ticket
+        in an Event object
+        '''
+        result = self.crits.event_count( params={ 'c-tickets.ticket_number' :
+                                                 pulse_id } )
+        if result > 0:
+            return True
         return False
+
+
+    def build_crits_event(self, event_title, description, crits_source,
+                          params={}):
+        '''
+        Builds an event in CRITs
+        '''
+        event = self.crits.add_event('Intel Sharing', event_title, description,
+                                crits_source, params=params)
+        return event
+
+
+    def add_crits_indicator(self, indicator_value, indicator_type, crits_source,
+                            params={}):
+        result = self.crits.add_indicator(indicator_type, indicator_value,
+                                          crits_source, params=params)
+        if result:
+            if result['return_code'] == 0:
+                return result
+            else:
+                print('Error when adding CRITs Indicator: '
+                      '{}'.format(result['message']))
+        return False
+
+
+    def add_ticket_to_crits_event(self, event_id, pulse_id, params={},
+                                  proxies={}, verify=True):
+        '''
+        Adds a ticket to the provided CRITs Event
+        '''
+        submit_url = '{}/api/v1/{}/{}/'.format(self.crits_url, 'events',
+                                               event_id)
+        headers = {
+            'Content-Type' : 'application/json',
+        }
+
+        # date must be in the format %Y-%m-%d %H:%M:%S.%f
+        formatted_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+        data = {
+            'action' : 'ticket_add',
+            'ticket' : {
+                'ticket_number' : pulse_id,
+                'date' : formatted_date,
+            }
+        }
+
+        r = requests.patch(submit_url, headers=headers, proxies=proxies,
+                           params=params, data=json.dumps(data), verify=False)
+        if r.status_code == 200:
+            print('Ticket added successfully: {0} <-> {1}'.format(event_id,
+                                                                  pulse_id))
+            return True
+        else:
+            print('Error with status code {0} and message {1} when adding a '
+                  'ticket to event: {2} <-> {3}'.format(r.status_code, r.text,
+                                                        event_id, pulse_id))
+        return False
+
+
+    def build_crits_relationship(self, event_id, indicator_id, params={},
+                                 proxies={}, verify=True):
+        '''
+        Builds a relationship between the given event and indicator IDs
+        '''
+        submit_url = '{}/api/v1/{}/{}/'.format(self.crits_url, 'events',
+                                               event_id)
+        headers = {
+            'Content-Type' : 'application/json',
+        }
+
+        data = {
+            'action' : 'forge_relationship',
+            'right_type' : 'Indicator',
+            'right_id' : indicator_id,
+            'rel_type' : 'Related To',
+            'rel_date' : datetime.datetime.now(),
+            'rel_confidence' : 'high',
+            'rel_reason' : 'Related during automatic OTX import'
+        }
+
+        r = requests.patch(submit_url, proxies=proxies, params=params,
+                           data=data, verify=False)
+        if r.status_code == 200:
+            print('Relationship built successfully: {0} <-> '
+                  '{1}'.format(event_id,indicator_id))
+            return True
+        else:
+            print('Error with status code {0} and message {1} between these '
+                  'indicators: {2} <-> {3}'.format(r.status_code, r.text,
+                                                   event_id, indicator_id))
+            return False
 
 
 def main():
@@ -211,116 +369,9 @@ def main():
                            'number of days.')
     args = argparser.parse_args()
 
-    # Load the configuration
-    config = load_config(args.config)
-    # Now we're talkin
-    otx_api_key = config.get('otx', 'otx_api_key')
-    otx_url = config.get('otx', 'otx_url')
 
-    proxies = {
-            'http' : config.get('proxy', 'http'),
-            'http' : config.get('proxy', 'https'),
-    }
-
-    crits_url = config.get('crits', 'prod_url')
-    crits_dev_url = config.get('crits', 'dev_url')
-    crits_username = config.get('crits', 'username')
-    crits_api_key = config.get('crits', 'prod_api_key')
-    crits_dev_api_key = config.get('crits', 'dev_api_key')
-    crits_verify = config.getboolean('crits', 'verify')
-    crits_source = config.get('crits', 'source')
-    if args.dev:
-        crits_url = crits_dev_url
-        crits_api_key = crits_dev_api_key
-    if crits_url[-1] == '/':
-        crits_url = crits_url[:-1]
-
-    modified_since = None
-    if args.days:
-        print('Searching for pulses modified in the last {} '
-              'days'.format(args.days))
-        modified_since = datetime.datetime.now()\
-            - datetime.timedelta(days=args.days)
-
-    # Get pycrits ready for magic
-    crits = pycrits(crits_url, crits_username, crits_api_key, proxies=proxies,
-                    verify=crits_verify)
-
-    # Get our subscribed OTX pulses
-    pulse_data = get_subscribed_pulses(otx_url, otx_api_key,
-                                       modified_since=modified_since,
-                                       proxies=proxies)
-
-    # Now iterate through these pulses
-    for pulse in pulse_data['results']:
-        # This will be used to track relationships
-        relationship_map = []
-
-        print('Found pulse with id {} and title {}'.format(pulse['id'],
-                                                           pulse['name']))
-        if is_pulse_in_crits(crits, pulse['id']):
-            print('Pulse was already in CRITs')
-            continue
-
-        print('Adding pulse {} to CRITs.'.format(pulse['name']))
-        # Get the actual indicator and event data from the pulse
-        indicator_data = get_pulse_data(pulse['id'], otx_url, otx_api_key,
-                                        proxies=proxies)
-        event_title = indicator_data['name']
-        created = indicator_data['created']
-        indicator_data['indicators'][0]
-        reference = indicator_data['references'][0]
-        description = indicator_data['description']
-        bucket_list = indicator_data['tags']
-
-        # Create the CRITs event first
-        print('Adding Event to CRITs with title {}'.format(event_title))
-        params = {
-            'bucket_list' : ','.join(bucket_list),
-            'description' : description,
-            'reference' : reference,
-            'method' : 'otx2crits',
-        }
-        event = build_crits_event(crits, event_title, description,
-                                  crits_source, params=params)
-        event_id = event['id']
-
-        # Add the indicators to CRITs
-        mapping = get_indicator_mapping()
-        if 'indicators' in indicator_data:
-            for i in indicator_data['indicators']:
-                # Reuse the params from creating the event
-                _type = mapping[i['type']]
-                if _type == None:
-                    continue
-                result = add_crits_indicator(crits, i['indicator'],
-                                             mapping[i['type']], crits_source,
-                                             params=params)
-                if result:
-                    print('Indicator created: {}'.format(result))
-                    indicator_id = result['id']
-                    print('Indicator created with id: '
-                          '{}'.format(indicator_id))
-                    relationship_map.append( indicator_id )
-
-        # Add a ticket to the Event to track the pulse_id
-        print('Adding ticket to Event {}'.format(event_title))
-        params = {
-            'api_key' : crits_api_key,
-            'username' : crits_username,
-        }
-        success = add_ticket_to_crits_event(crits_url, event_id, pulse['id'],
-                                            params=params, 
-                                            proxies=proxies,
-                                            verify=crits_verify)
-        if not success:
-            print('Forging on after a ticket error.')
-
-        # Build the relationships between the event and indicators
-        print('Building relationships.')
-        for _id in relationship_map:
-            build_crits_relationship(crits_url, event_id, _id, params=params,
-                                     proxies=proxies, verify=crits_verify)
+    otx2crits = OTX2CRITs(dev=args.dev, config=args.config, days=args.days)
+    otx2crits.execute()
 
 
 if __name__ == '__main__':
