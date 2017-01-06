@@ -118,7 +118,7 @@ class OTX2CRITs(object):
             }
             success = self.add_ticket_to_crits_event(event_id, pulse['id'],
                                                 params=params,
-                                                proxies=self.proxies,
+                                                proxies=self.crits_proxies,
                                                 verify=self.crits_verify)
             if not success:
                 print('Forging on after a ticket error.')
@@ -127,7 +127,7 @@ class OTX2CRITs(object):
             print('Building relationships.')
             for _id in relationship_map:
                 self.build_crits_relationship(event_id, _id, params=params,
-                                              proxies=self.proxies,
+                                              proxies=self.crits_proxies,
                                               verify=self.crits_verify)
 
 
