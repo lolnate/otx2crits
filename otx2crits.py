@@ -39,6 +39,11 @@ class OTX2CRITs(object):
         if self.crits_url[-1] == '/':
             self.crits_url = self.crits_url[:-1]
 
+        self.crits_proxies = {
+            'http' : self.config.get('crits', 'crits_proxy'),
+            'https' : self.config.get('crits', 'crits_proxy'),
+        }
+
         self.modified_since = None
         if days:
             print('Searching for pulses modified in the last {} '
@@ -48,7 +53,7 @@ class OTX2CRITs(object):
 
         # Get pycrits ready for magic
         self.crits = pycrits(self.crits_url, self.crits_username,
-                             self.crits_api_key, proxies=self.proxies,
+                             self.crits_api_key, proxies=self.crits_proxies,
                              verify=self.crits_verify)
 
 

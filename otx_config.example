@@ -13,6 +13,8 @@ https = http://user:pass@IP:PORT/
 # Add URLs for your CRITs prod and optionally dev environments
 prod_url = http://prod_ip.com/
 dev_url = http://dev_ip.com/
+# If needed, a proxy for CRITs to use
+crits_proxy = 
 # CRITs username
 username = nhausrath
 # API keys associated with that username
