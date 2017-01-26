@@ -66,22 +66,28 @@ class OTX2CRITs(object):
             relationship_map = []
 
             print('Found pulse with id {} and title {}'.format(pulse['id'],
-                                                               pulse['name']))
+                                                               pulse['name'].encode("utf-8")))
             if self.is_pulse_in_crits(pulse['id']):
                 print('Pulse was already in CRITs')
                 continue
 
-            print('Adding pulse {} to CRITs.'.format(pulse['name']))
+            print('Adding pulse {} to CRITs.'.format(pulse['name'].encode("utf-8")))
             # Get the actual indicator and event data from the pulse
             indicator_data = pulse['indicators']
             event_title = pulse['name']
             created = pulse['created']
-            reference = pulse['references'][0]
+            reference =''
+            if not reference:
+
+                reference = 'No reference documented'
+            else:
+                reference = pulse['references'][0]
+
             description = pulse['description']
             bucket_list = pulse['tags']
 
             # Create the CRITs event first
-            print('Adding Event to CRITs with title {}'.format(event_title))
+            print('Adding Event to CRITs with title {}'.format(event_title.encode("utf-8")))
             params = {
                 'bucket_list' : ','.join(bucket_list),
                 'description' : description,
@@ -111,7 +117,7 @@ class OTX2CRITs(object):
                     relationship_map.append( indicator_id )
 
             # Add a ticket to the Event to track the pulse_id
-            print('Adding ticket to Event {}'.format(event_title))
+            print('Adding ticket to Event {}'.format(event_title.encode("utf-8")))
             params = {
                 'api_key' : self.crits_api_key,
                 'username' : self.crits_username,
