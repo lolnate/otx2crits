@@ -71,7 +71,7 @@ class OTX2CRITs(object):
                 print('Pulse was already in CRITs')
                 continue
 
-            print('Adding pulse {} to CRITs.'.format(pulse['name']).encode("utf-8"))
+            print('Adding pulse {} to CRITs.'.format(pulse['name'].encode("utf-8")))
             # Get the actual indicator and event data from the pulse
             indicator_data = pulse['indicators']
             event_title = pulse['name']
