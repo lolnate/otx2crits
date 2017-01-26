@@ -76,7 +76,11 @@ class OTX2CRITs(object):
             indicator_data = pulse['indicators']
             event_title = pulse['name']
             created = pulse['created']
-            reference = pulse['references'][0]
+            reference =''
+            if not reference:
+                reference = pulse['references'][0]
+            else:
+                reference = 'No reference documented'
             description = pulse['description']
             bucket_list = pulse['tags']
 
