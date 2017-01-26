@@ -87,7 +87,7 @@ class OTX2CRITs(object):
             bucket_list = pulse['tags']
 
             # Create the CRITs event first
-            print('Adding Event to CRITs with title {}'.format(event_title).encode("utf-8"))
+            print('Adding Event to CRITs with title {}'.format(event_title.encode("utf-8")))
             params = {
                 'bucket_list' : ','.join(bucket_list),
                 'description' : description,
