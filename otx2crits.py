@@ -117,7 +117,7 @@ class OTX2CRITs(object):
                     relationship_map.append( indicator_id )
 
             # Add a ticket to the Event to track the pulse_id
-            print('Adding ticket to Event {}'.format(event_title))
+            print('Adding ticket to Event {}'.format(event_title.encode("utf-8")))
             params = {
                 'api_key' : self.crits_api_key,
                 'username' : self.crits_username,
