@@ -78,9 +78,11 @@ class OTX2CRITs(object):
             created = pulse['created']
             reference =''
             if not reference:
-                reference = pulse['references'][0]
-            else:
+
                 reference = 'No reference documented'
+            else:
+                reference = pulse['references'][0]
+
             description = pulse['description']
             bucket_list = pulse['tags']
 
