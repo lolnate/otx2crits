@@ -66,7 +66,7 @@ class OTX2CRITs(object):
             relationship_map = []
 
             print('Found pulse with id {} and title {}'.format(pulse['id'],
-                                                               pulse['name']))
+                                                               pulse['name'].encode("utf-8")))
             if self.is_pulse_in_crits(pulse['id']):
                 print('Pulse was already in CRITs')
                 continue
