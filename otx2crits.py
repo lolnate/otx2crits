@@ -187,7 +187,7 @@ class OTX2CRITs(object):
             'email' : it.EMAIL_ADDRESS,
             'Email' : it.EMAIL_ADDRESS,
             'filepath' : it.FILE_PATH,
-            'Filepath' : it.FILE_PATH,
+            'FilePath' : it.FILE_PATH,
             'FileHash-MD5' : it.MD5,
             'Imphash' : it.IMPHASH,
             'PEhash' : None,
