@@ -86,6 +86,10 @@ class OTX2CRITs(object):
             description = pulse['description']
             bucket_list = pulse['tags']
 
+            # CRITs requires a description
+            if description == '':
+                description = 'No description given.'
+
             # Create the CRITs event first
             print('Adding Event to CRITs with title {}'.format(event_title.encode("utf-8")))
             params = {
