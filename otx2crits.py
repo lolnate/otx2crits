@@ -107,11 +107,31 @@ class OTX2CRITs(object):
                 continue
             event_id = event['id']
 
+            # Add a ticket to the Event to track the pulse_id
+            # This goes above the indicators because sometimes adding
+            # indicators fails and we end up with many duplicate events.
+            print('Adding ticket to Event {}'.format(event_title.encode("utf-8")))
+            params = {
+                'api_key' : self.crits_api_key,
+                'username' : self.crits_username,
+            }
+            success = self.add_ticket_to_crits_event(event_id, pulse['id'],
+                                                params=params,
+                                                proxies=self.crits_proxies,
+                                                verify=self.crits_verify)
+            if not success:
+                print('Forging on after a ticket error.')
+
             # Add the indicators to CRITs
             mapping = self.get_indicator_mapping()
             for i in indicator_data:
                 # Reuse the params from creating the event
-                _type = mapping[i['type']]
+                if i['type'] in mapping:
+                    _type = mapping[i['type']]
+                else:
+                    # We found an indicator with a type we don't support.
+                    print("We don't support type {}".format(i['type']))
+                    continue
                 if _type == None:
                     continue
                 result = self.add_crits_indicator(i['indicator'],
@@ -125,18 +145,6 @@ class OTX2CRITs(object):
                           '{}'.format(indicator_id))
                     relationship_map.append( indicator_id )
 
-            # Add a ticket to the Event to track the pulse_id
-            print('Adding ticket to Event {}'.format(event_title.encode("utf-8")))
-            params = {
-                'api_key' : self.crits_api_key,
-                'username' : self.crits_username,
-            }
-            success = self.add_ticket_to_crits_event(event_id, pulse['id'],
-                                                params=params,
-                                                proxies=self.crits_proxies,
-                                                verify=self.crits_verify)
-            if not success:
-                print('Forging on after a ticket error.')
 
             # Build the relationships between the event and indicators
             print('Building relationships.')
@@ -205,6 +213,7 @@ class OTX2CRITs(object):
             'mutex': it.MUTEX,
             'Mutex': it.MUTEX,
             'CVE': None,
+            'Yara': None,
         }
         return mapping
 
