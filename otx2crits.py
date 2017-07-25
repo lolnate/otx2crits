@@ -86,6 +86,10 @@ class OTX2CRITs(object):
             description = pulse['description']
             bucket_list = pulse['tags']
 
+            # CRITs requires a description
+            if description == '':
+                description = 'No description given.'
+
             # Create the CRITs event first
             print('Adding Event to CRITs with title {}'.format(event_title.encode("utf-8")))
             params = {
@@ -94,8 +98,13 @@ class OTX2CRITs(object):
                 'reference' : reference,
                 'method' : 'otx2crits',
             }
-            event = self.build_crits_event(event_title, description,
-                                      self.crits_source, params=params)
+            event = self.build_crits_event(event_title, self.crits_source,
+                                           description, params=params)
+            if 'id' not in event:
+                print('id not found in event object returned from crits!')
+                print('Event object was: {}'.format(repr(event)))
+                print('Skipping event: {}.'.format(event_title))
+                continue
             event_id = event['id']
 
             # Add the indicators to CRITs
@@ -278,7 +287,7 @@ class OTX2CRITs(object):
         return False
 
 
-    def build_crits_event(self, event_title, description, crits_source,
+    def build_crits_event(self, event_title, crits_source, description='',
                           params={}):
         '''
         Builds an event in CRITs
